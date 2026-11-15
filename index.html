@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anfrage Luftbildauswertung (Prototyp)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--ink:#1d2a26;--mute:#5d6b66;--line:#d9ded8;--bg:#f4f2ec;--card:#fff;--acc:#2f5d50;--acc2:#e8efe9;--warn:#9a5b13}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+.demo{background:var(--ink);color:#fff;font-size:13px;text-align:center;padding:6px 12px}
+main{max-width:760px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px}
+.lead{color:var(--mute);margin:0 0 24px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
+h2{font-size:17px;margin:0 0 14px;display:flex;gap:10px;align-items:center}
+h2 span{background:var(--acc);color:#fff;border-radius:50%;width:26px;height:26px;display:inline-grid;place-items:center;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+label i,.svc i{font-style:normal}
+label{display:block;font-size:14px;font-weight:600}
+input,select,textarea{width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:70px;resize:vertical}
+.services{display:grid;gap:8px}
+.svc{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-weight:500}
+.svc input{width:auto;margin:0}
+.svc.on{border-color:var(--acc);background:var(--acc2)}
+.svc.off{color:var(--mute)}
+.svc small{margin-left:auto;color:var(--mute)}
+#map{height:380px;border-radius:8px;border:1px solid var(--line);margin-top:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.row>*{flex:1}
+.tabs{display:flex;gap:8px;margin-top:12px}
+button{font:inherit;border:1px solid var(--acc);background:#fff;color:var(--acc);border-radius:6px;padding:9px 14px;cursor:pointer;flex:none}
+button.on,button.primary{background:var(--acc);color:#fff}
+button.primary{width:100%;padding:13px;font-weight:600;font-size:17px}
+button:disabled{opacity:.6;cursor:wait}
+.hint{font-size:14px;color:var(--mute);margin:8px 0 0}
+.area{font-weight:600;margin-top:10px}
+.check{display:flex;gap:8px;font-weight:400;align-items:flex-start;margin-top:12px}
+.check input{width:auto;margin-top:5px}
+.err{color:#a12622;font-weight:600;margin:10px 0}
+#result{display:none}
+.big{font-size:30px;font-weight:700;margin:4px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:14px 0}
+.kv dt{color:var(--mute)}.kv dd{margin:0;font-weight:600}
+.slots{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.slots span{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:14px}
+.note{background:#fbf3e4;border:1px solid #ecd9b4;color:var(--warn);border-radius:8px;padding:10px 12px;font-size:14px}
+.top{display:flex;justify-content:flex-end;gap:6px;margin-bottom:14px}
+.top button{padding:5px 11px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="demo" data-i18n="banner">Prototyp zu Demonstrationszwecken – kein echtes Angebot, Preise sind Beispielwerte</div>
+<main>
+<div class="top" id="langs"><button type="button" data-l="de">Deutsch</button><button type="button" data-l="en">English</button><button type="button" data-l="fr">Français</button><button type="button" data-l="nl">Nederlands</button></div>
+<h1 data-i18n="title">Anfrage Luftbildauswertung</h1>
+<p class="lead" data-i18n="lead">In zwei Minuten zur Preisspanne, Projektnummer und einem Rückruftermin.</p>
+
+<form id="form">
+<section>
+<h2><span>1</span><b data-i18n="s1">Ihre Kontaktdaten</b></h2>
+<div class="grid">
+<label><i data-i18n="name">Name *</i><input name="name" required></label>
+<label><i data-i18n="firma">Firma</i><input name="firma"></label>
+<label><i data-i18n="email">E-Mail *</i><input name="email" type="email" required></label>
+<label><i data-i18n="tel">Telefon</i><input name="telefon" type="tel"></label>
+</div>
+</section>
+
+<section>
+<h2><span>2</span><b data-i18n="s2">Leistung</b></h2>
+<div class="services">
+<label class="svc on"><input type="radio" name="leistung" value="Luftbildauswertung" checked><i data-i18n="svc1">Luftbildauswertung (Kampfmittelvorerkundung)</i></label>
+<label class="svc off"><input type="radio" disabled><i data-i18n="svc2">Historische Recherche</i><small data-i18n="soon">bald verfügbar</small></label>
+<label class="svc off"><input type="radio" disabled><i data-i18n="svc3">Räumkonzept / Fachplanung</i><small data-i18n="soon">bald verfügbar</small></label>
+</div>
+</section>
+
+<section>
+<h2><span>3</span><b data-i18n="s3">Standort</b></h2>
+<div class="row">
+<label><i data-i18n="adr">Adresse oder Ort</i><input id="adr" name="adresse" placeholder="Möckmühler Straße, 74861 Neudenau"></label>
+<button type="button" id="find" data-i18n="find">Auf Karte suchen</button>
+</div>
+<div class="tabs">
+<button type="button" id="mRadius" class="on" data-i18n="mRadius">Punkt + Radius</button>
+<button type="button" id="mPoly" data-i18n="mPoly">Fläche zeichnen</button>
+</div>
+<div id="map"></div>
+<div id="radiusBox" class="row" style="margin-top:10px">
+<label><i data-i18n="radius">Radius um den Punkt (Meter)</i><input id="radius" type="number" min="10" max="2000" step="10" value="100"></label>
+</div>
+<div id="polyBox" class="row" style="margin-top:10px;display:none">
+<button type="button" id="undo" data-i18n="undo">Letzten Punkt entfernen</button>
+<button type="button" id="clear" data-i18n="clear">Neu beginnen</button>
+</div>
+<p class="hint" id="mapHint"></p>
+<p class="area" id="area"></p>
+</section>
+
+<section>
+<h2><span>4</span><b data-i18n="s4">Zum Vorhaben</b></h2>
+<div class="grid">
+<label><i data-i18n="vorhaben">Art des Vorhabens</i>
+<select name="vorhaben"><option value="Neubau" data-i18n="v1">Neubau</option><option value="Bebauungsplan" data-i18n="v2">Bebauungsplan</option><option value="Tiefbau / Leitungen" data-i18n="v3">Tiefbau / Leitungen</option><option value="Grundstückskauf" data-i18n="v4">Grundstückskauf</option><option value="Sonstiges" data-i18n="v5">Sonstiges</option></select></label>
+<label><i data-i18n="baubeginn">Geplanter Baubeginn</i><input name="baubeginn" type="date"></label>
+<label><i data-i18n="dring">Dringlichkeit</i>
+<select name="dringlichkeit"><option value="normal" data-i18n="normal">Normal</option><option value="eilig" data-i18n="eilig">Eilig (Aufschlag)</option></select></label>
+</div>
+<label style="margin-top:12px"><i data-i18n="notes">Anmerkungen</i><textarea name="nachricht"></textarea></label>
+<label class="check"><input type="checkbox" required><i data-i18n="consent">Ich bin einverstanden, dass meine Angaben zur Bearbeitung der Anfrage gespeichert werden.</i></label>
+</section>
+
+<p class="err" id="err"></p>
+<button class="primary" id="send" data-i18n="send">Preisspanne anzeigen</button>
+</form>
+
+<section id="result">
+<h2 data-i18n="resTitle">Ihre Anfrage ist eingegangen</h2>
+<div id="resBody"></div>
+</section>
+</main>
+
+<script>
+// ▼▼▼ HIER die Production-URL des n8n-Webhooks eintragen (leer = Offline-Vorschau ohne n8n) ▼▼▼
+const WEBHOOK_URL = "https://sumitpr.app.n8n.cloud/webhook/uxo-anfrage";
+
+function buildOffer(p, now) {
+  p = p || {};
+  var R = 6371008.8, rad = Math.PI / 180;
+  function polyAreaM2(pts) {
+    var s = 0;
+    for (var i = 0; i < pts.length; i++) {
+      var a = pts[i], b = pts[(i + 1) % pts.length];
+      s += (b[1] - a[1]) * rad * (2 + Math.sin(a[0] * rad) + Math.sin(b[0] * rad));
+    }
+    return Math.abs(s * R * R / 2);
+  }
+  function round10(x) { return Math.round(x / 10) * 10; }
+  var txt = function (v) { return (v === undefined || v === null) ? '' : String(v).trim().slice(0, 500); };
+
+  var problems = [];
+  var name = txt(p.name), email = txt(p.email);
+  if (!name) problems.push('Name fehlt');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) problems.push('E-Mail ungültig');
+
+  var modus = p.modus === 'polygon' ? 'polygon' : 'radius';
+  var lat = Number(p.lat), lon = Number(p.lon), radius = Number(p.radius_m) || 0;
+  var poly = Array.isArray(p.polygon) ? p.polygon.filter(function (q) {
+    return Array.isArray(q) && isFinite(q[0]) && isFinite(q[1]);
+  }).slice(0, 200) : [];
+  var areaM2 = 0, geojson = '';
+  if (modus === 'polygon' && poly.length >= 3) {
+    areaM2 = polyAreaM2(poly);
+    var ring = poly.map(function (q) { return [Number(q[1]), Number(q[0])]; });
+    ring.push(ring[0]);
+    geojson = JSON.stringify({ type: 'Polygon', coordinates: [ring] });
+  } else if (modus === 'radius' && isFinite(lat) && isFinite(lon) && radius > 0) {
+    areaM2 = Math.PI * radius * radius;
+    geojson = JSON.stringify({ type: 'Point', coordinates: [lon, lat], radius_m: radius });
+  } else {
+    problems.push('Standort fehlt');
+  }
+  var ha = Math.round(areaM2 / 100) / 100;
+  if (geojson && ha < 0.01) problems.push('Fläche sehr klein');
+  if (ha > 200) problems.push('Fläche über 200 ha');
+
+  var eilig = p.dringlichkeit === 'eilig';
+  var von = '', bis = '', wochen = '';
+  if (!problems.length) {
+    // DEMO-ANNAHMEN: Preislogik hier anpassen
+    var mid = 480;
+    if (ha > 1) mid += 45 * (Math.min(ha, 20) - 1);
+    if (ha > 20) mid += 25 * (ha - 20);
+    if (eilig) mid *= 1.3;
+    von = round10(mid * 0.85);
+    bis = round10(mid * 1.25);
+    if (ha <= 5) wochen = eilig ? '1–2' : '2–3';
+    else if (ha <= 20) wochen = eilig ? '2–3' : '3–4';
+    else wochen = eilig ? '3–4' : '4–6';
+  }
+
+  var wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  var days = [], d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12));
+  while (days.length < 3) {
+    d = new Date(d.getTime() + 86400000);
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) days.push(d);
+  }
+  function fmt(x, t) {
+    return wd[x.getUTCDay()] + ' ' + ('0' + x.getUTCDate()).slice(-2) + '.' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '. ' + t + ' Uhr';
+  }
+  var slots = [fmt(days[0], '10:00'), fmt(days[0], '14:30'), fmt(days[1], '10:00'), fmt(days[2], '14:30')];
+
+  var nr = 'LBA-' + now.getUTCFullYear() + '-' + ('0000' + Math.floor(Math.random() * 10000)).slice(-4);
+  var ok = problems.length === 0;
+  return {
+    projekt_nr: nr,
+    eingang: now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+    status: ok ? 'Neu' : 'Manuell prüfen',
+    leistung: txt(p.leistung) || 'Luftbildauswertung',
+    name: name, firma: txt(p.firma), email: email, telefon: txt(p.telefon),
+    adresse: txt(p.adresse),
+    lat: isFinite(lat) ? Math.round(lat * 1e6) / 1e6 : '',
+    lon: isFinite(lon) ? Math.round(lon * 1e6) / 1e6 : '',
+    modus: modus, radius_m: modus === 'radius' ? radius : '',
+    flaeche_ha: ha,
+    vorhaben: txt(p.vorhaben), baubeginn: txt(p.baubeginn),
+    dringlichkeit: eilig ? 'eilig' : 'normal',
+    preis_von: von, preis_bis: bis, bearbeitung_wochen: wochen,
+    ruf_termine: slots.join(' | '),
+    hinweis: ok ? '' : problems.join('; '),
+    nachricht: txt(p.nachricht),
+    geojson: geojson,
+    ok: ok,
+    sprache: /^(de|en|fr|nl)$/.test(p.sprache) ? p.sprache : 'de'
+  };
+}
+
+
+// Kartenhintergrund: probiert mehrere freie Quellen nacheinander, falls eine nicht lädt
+function addBase(map) {
+  const src = [
+    ['https://sgx.geodatenzentrum.de/wmts_basemapde/tile/1.0.0/de_basemapde_web_raster_farbe/default/GLOBAL_WEBMERCATOR/{z}/{y}/{x}.png', '© basemap.de / BKG', 18],
+    ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', 'Tiles © Esri', 19],
+    ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap', 19]
+  ];
+  let i = 0, cur;
+  (function use() {
+    let ok = false, bad = 0;
+    cur = L.tileLayer(src[i][0], {attribution: src[i][1], maxNativeZoom: src[i][2], maxZoom: 19}).addTo(map);
+    cur.on('tileload', () => { ok = true; });
+    cur.on('tileerror', () => { if (!ok && ++bad >= 3 && i < src.length - 1) { map.removeLayer(cur); i++; use(); } });
+  })();
+}
+
+
+const I18N = {"de": {"banner": "Prototyp zu Demonstrationszwecken – kein echtes Angebot, Preise sind Beispielwerte", "title": "Anfrage Luftbildauswertung", "lead": "In zwei Minuten zur Preisspanne, Projektnummer und einem Rückruftermin.", "s1": "Ihre Kontaktdaten", "name": "Name *", "firma": "Firma", "email": "E-Mail *", "tel": "Telefon", "s2": "Leistung", "svc1": "Luftbildauswertung (Kampfmittelvorerkundung)", "svc2": "Historische Recherche", "svc3": "Räumkonzept / Fachplanung", "soon": "bald verfügbar", "s3": "Standort", "adr": "Adresse oder Ort", "find": "Auf Karte suchen", "mRadius": "Punkt + Radius", "mPoly": "Fläche zeichnen", "radius": "Radius um den Punkt (Meter)", "undo": "Letzten Punkt entfernen", "clear": "Neu beginnen", "hintR": "Klicken Sie auf die Karte, um den Mittelpunkt zu setzen.", "hintP": "Klicken Sie die Eckpunkte Ihrer Fläche nacheinander an (mindestens drei).", "notfound": "Adresse nicht gefunden – bitte den Punkt direkt auf der Karte setzen.", "searchfail": "Suche nicht erreichbar – bitte den Punkt direkt auf der Karte setzen.", "area": "Untersuchungsfläche: ca. {x} ha", "s4": "Zum Vorhaben", "vorhaben": "Art des Vorhabens", "v1": "Neubau", "v2": "Bebauungsplan", "v3": "Tiefbau / Leitungen", "v4": "Grundstückskauf", "v5": "Sonstiges", "baubeginn": "Geplanter Baubeginn", "dring": "Dringlichkeit", "normal": "Normal", "eilig": "Eilig (Aufschlag)", "notes": "Anmerkungen", "consent": "Ich bin einverstanden, dass meine Angaben zur Bearbeitung der Anfrage gespeichert werden.", "send": "Preisspanne anzeigen", "sending": "Wird berechnet …", "errLoc": "Bitte markieren Sie den Standort auf der Karte.", "errSend": "Die Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut.", "resTitle": "Ihre Anfrage ist eingegangen", "offline": "Offline-Vorschau: Es wurde nichts gespeichert (kein n8n-Webhook eingetragen).", "cost": "Voraussichtliche Kosten (netto)", "manual": "Für diese Anfrage erstellen wir ein individuelles Angebot und melden uns persönlich bei Ihnen.", "kNr": "Projektnummer", "kSvc": "Leistung", "svcShort": "Luftbildauswertung", "kArea": "Fläche", "kTime": "Bearbeitungszeit", "weeks": "{x} Wochen ab Auftrag", "byarr": "nach Absprache", "slots": "Mögliche Termine für ein Rückrufgespräch:", "disclaimer": "Die Preisspanne ist eine unverbindliche Orientierung. Das verbindliche Angebot erhalten Sie nach Prüfung der Luftbildverfügbarkeit."}, "en": {"banner": "Prototype for demonstration only – not a real offer, prices are example values", "title": "Request an aerial image analysis", "lead": "Get a price range, a project number and a callback slot in two minutes.", "s1": "Your contact details", "name": "Name *", "firma": "Company", "email": "Email *", "tel": "Phone", "s2": "Service", "svc1": "Aerial image analysis (preliminary UXO survey)", "svc2": "Historical research", "svc3": "Clearance concept / specialist planning", "soon": "coming soon", "s3": "Location", "adr": "Address or place", "find": "Find on map", "mRadius": "Point + radius", "mPoly": "Draw area", "radius": "Radius around the point (metres)", "undo": "Remove last point", "clear": "Start over", "hintR": "Click on the map to set the centre point.", "hintP": "Click the corners of your area one after another (at least three).", "notfound": "Address not found – please set the point directly on the map.", "searchfail": "Search unavailable – please set the point directly on the map.", "area": "Survey area: approx. {x} ha", "s4": "About the project", "vorhaben": "Type of project", "v1": "New building", "v2": "Development plan", "v3": "Civil works / utilities", "v4": "Land purchase", "v5": "Other", "baubeginn": "Planned start of construction", "dring": "Urgency", "normal": "Normal", "eilig": "Urgent (surcharge)", "notes": "Notes", "consent": "I agree that my details are stored to process this request.", "send": "Show price range", "sending": "Calculating …", "errLoc": "Please mark the location on the map.", "errSend": "The request could not be sent. Please try again.", "resTitle": "We have received your request", "offline": "Offline preview: nothing was saved (no n8n webhook set).", "cost": "Estimated cost (net)", "manual": "We will prepare an individual offer for this request and contact you personally.", "kNr": "Project number", "kSvc": "Service", "svcShort": "Aerial image analysis", "kArea": "Area", "kTime": "Processing time", "weeks": "{x} weeks from order", "byarr": "by arrangement", "slots": "Possible times for a callback:", "disclaimer": "The price range is a non-binding guide. You will receive the binding offer once we have checked which aerial images are available."}, "fr": {"banner": "Prototype de démonstration – pas une offre réelle, les prix sont des exemples", "title": "Demande d'analyse de photos aériennes", "lead": "Obtenez en deux minutes une fourchette de prix, un numéro de projet et un créneau de rappel.", "s1": "Vos coordonnées", "name": "Nom *", "firma": "Société", "email": "E-mail *", "tel": "Téléphone", "s2": "Prestation", "svc1": "Analyse de photos aériennes (étude préliminaire pyrotechnique)", "svc2": "Recherche historique", "svc3": "Concept de dépollution / planification", "soon": "bientôt disponible", "s3": "Emplacement", "adr": "Adresse ou lieu", "find": "Chercher sur la carte", "mRadius": "Point + rayon", "mPoly": "Dessiner la zone", "radius": "Rayon autour du point (mètres)", "undo": "Supprimer le dernier point", "clear": "Recommencer", "hintR": "Cliquez sur la carte pour placer le point central.", "hintP": "Cliquez successivement sur les sommets de votre zone (au moins trois).", "notfound": "Adresse introuvable – veuillez placer le point directement sur la carte.", "searchfail": "Recherche indisponible – veuillez placer le point directement sur la carte.", "area": "Zone d'étude : env. {x} ha", "s4": "À propos du projet", "vorhaben": "Type de projet", "v1": "Construction neuve", "v2": "Plan d'urbanisme", "v3": "Génie civil / réseaux", "v4": "Achat de terrain", "v5": "Autre", "baubeginn": "Début des travaux prévu", "dring": "Urgence", "normal": "Normale", "eilig": "Urgent (supplément)", "notes": "Remarques", "consent": "J'accepte que mes données soient enregistrées pour traiter cette demande.", "send": "Afficher la fourchette de prix", "sending": "Calcul en cours …", "errLoc": "Veuillez indiquer l'emplacement sur la carte.", "errSend": "La demande n'a pas pu être envoyée. Veuillez réessayer.", "resTitle": "Votre demande a bien été reçue", "offline": "Aperçu hors ligne : rien n'a été enregistré (aucun webhook n8n défini).", "cost": "Coût estimé (HT)", "manual": "Nous établirons une offre individuelle pour cette demande et vous contacterons personnellement.", "kNr": "Numéro de projet", "kSvc": "Prestation", "svcShort": "Analyse de photos aériennes", "kArea": "Surface", "kTime": "Délai de traitement", "weeks": "{x} semaines à partir de la commande", "byarr": "à convenir", "slots": "Créneaux possibles pour un rappel :", "disclaimer": "La fourchette de prix est indicative et sans engagement. Vous recevrez l'offre ferme après vérification de la disponibilité des photos aériennes."}, "nl": {"banner": "Prototype voor demonstratie – geen echte offerte, prijzen zijn voorbeeldwaarden", "title": "Aanvraag luchtfoto-analyse", "lead": "In twee minuten een prijsindicatie, projectnummer en terugbelafspraak.", "s1": "Uw contactgegevens", "name": "Naam *", "firma": "Bedrijf", "email": "E-mail *", "tel": "Telefoon", "s2": "Dienst", "svc1": "Luchtfoto-analyse (vooronderzoek explosieven)", "svc2": "Historisch onderzoek", "svc3": "Ruimingsconcept / vakplanning", "soon": "binnenkort beschikbaar", "s3": "Locatie", "adr": "Adres of plaats", "find": "Zoek op kaart", "mRadius": "Punt + straal", "mPoly": "Gebied tekenen", "radius": "Straal rond het punt (meter)", "undo": "Laatste punt verwijderen", "clear": "Opnieuw beginnen", "hintR": "Klik op de kaart om het middelpunt te plaatsen.", "hintP": "Klik de hoekpunten van uw gebied één voor één aan (minimaal drie).", "notfound": "Adres niet gevonden – plaats het punt direct op de kaart.", "searchfail": "Zoeken niet beschikbaar – plaats het punt direct op de kaart.", "area": "Onderzoeksgebied: ca. {x} ha", "s4": "Over het project", "vorhaben": "Soort project", "v1": "Nieuwbouw", "v2": "Bestemmingsplan", "v3": "Grondwerk / leidingen", "v4": "Grondaankoop", "v5": "Overig", "baubeginn": "Geplande start bouw", "dring": "Urgentie", "normal": "Normaal", "eilig": "Spoed (toeslag)", "notes": "Opmerkingen", "consent": "Ik ga ermee akkoord dat mijn gegevens worden opgeslagen om deze aanvraag te verwerken.", "send": "Prijsindicatie tonen", "sending": "Wordt berekend …", "errLoc": "Markeer de locatie op de kaart.", "errSend": "De aanvraag kon niet worden verzonden. Probeer het opnieuw.", "resTitle": "Uw aanvraag is ontvangen", "offline": "Offline-voorbeeld: er is niets opgeslagen (geen n8n-webhook ingesteld).", "cost": "Geschatte kosten (excl. btw)", "manual": "Voor deze aanvraag maken wij een offerte op maat en nemen wij persoonlijk contact met u op.", "kNr": "Projectnummer", "kSvc": "Dienst", "svcShort": "Luchtfoto-analyse", "kArea": "Oppervlakte", "kTime": "Doorlooptijd", "weeks": "{x} weken na opdracht", "byarr": "in overleg", "slots": "Mogelijke tijden voor een terugbelgesprek:", "disclaimer": "De prijsindicatie is vrijblijvend. U ontvangt de definitieve offerte nadat de beschikbaarheid van luchtfoto's is gecontroleerd."}};
+const LOCALE = {de: 'de-DE', en: 'en-GB', fr: 'fr-FR', nl: 'nl-NL'};
+const DAYS = {en: {Mo: 'Mon', Di: 'Tue', Mi: 'Wed', Do: 'Thu', Fr: 'Fri'}, fr: {Mo: 'lun.', Di: 'mar.', Mi: 'mer.', Do: 'jeu.', Fr: 'ven.'}, nl: {Mo: 'ma', Di: 'di', Mi: 'wo', Do: 'do', Fr: 'vr'}};
+const $ = id => document.getElementById(id);
+let lang = 'de';
+try { lang = localStorage.getItem('lang') || (navigator.language || 'de').slice(0, 2); } catch (e) {}
+if (!I18N[lang]) lang = 'de';
+const t = (k, x) => I18N[lang][k].replace('{x}', x);
+const nf = v => Number(v).toLocaleString(LOCALE[lang]);
+function slotText(s) {
+  if (lang === 'de') return s;
+  const m = s.match(/^(\S+) (\S+) (\d\d):(\d\d)/); if (!m) return s;
+  const time = lang === 'fr' ? m[3] + 'h' + m[4] : m[3] + ':' + m[4] + (lang === 'nl' ? ' uur' : '');
+  return (DAYS[lang][m[1]] || m[1]) + ' ' + m[2] + ' ' + time;
+}
+
+const map = L.map('map').setView([51.2, 10.4], 6);
+addBase(map);
+const layer = L.layerGroup().addTo(map);
+let mode = 'radius', center = null, pts = [], last = null, hintKey = 'hintR';
+
+function areaHa() {
+  const o = buildOffer({name: 'x', email: 'x@x.xx', modus: mode, lat: center && center.lat, lon: center && center.lng,
+    radius_m: $('radius').value, polygon: pts.map(p => [p.lat, p.lng])}, new Date());
+  return o.geojson ? o.flaeche_ha : 0;
+}
+function draw() {
+  layer.clearLayers();
+  if (mode === 'radius' && center) {
+    L.circle(center, {radius: Number($('radius').value) || 0, color: '#2f5d50'}).addTo(layer);
+    L.circleMarker(center, {radius: 5, color: '#2f5d50', fillOpacity: 1}).addTo(layer);
+  }
+  if (mode === 'polygon') {
+    pts.forEach(p => L.circleMarker(p, {radius: 4, color: '#2f5d50', fillOpacity: 1}).addTo(layer));
+    if (pts.length >= 3) L.polygon(pts, {color: '#2f5d50'}).addTo(layer);
+    else if (pts.length === 2) L.polyline(pts, {color: '#2f5d50'}).addTo(layer);
+  }
+  const ha = areaHa();
+  $('area').textContent = ha ? t('area', nf(ha)) : '';
+}
+function setHint(k) { hintKey = k; $('mapHint').textContent = t(k); }
+function setMode(m) {
+  mode = m;
+  $('mRadius').classList.toggle('on', m === 'radius');
+  $('mPoly').classList.toggle('on', m === 'polygon');
+  $('radiusBox').style.display = m === 'radius' ? '' : 'none';
+  $('polyBox').style.display = m === 'polygon' ? '' : 'none';
+  setHint(m === 'radius' ? 'hintR' : 'hintP');
+  draw();
+}
+function setLang(l) {
+  lang = l; try { localStorage.setItem('lang', l); } catch (e) {}
+  document.documentElement.lang = l;
+  document.querySelectorAll('[data-i18n]').forEach(n => { n.textContent = t(n.dataset.i18n); });
+  document.querySelectorAll('#langs button').forEach(b => b.classList.toggle('on', b.dataset.l === l));
+  document.title = t('title');
+  setHint(hintKey); draw();
+  if (last) showResult(last[0], last[1]);
+}
+document.querySelectorAll('#langs button').forEach(b => { b.onclick = () => setLang(b.dataset.l); });
+
+map.on('click', e => { if (mode === 'radius') center = e.latlng; else pts.push(e.latlng); draw(); });
+$('mRadius').onclick = () => setMode('radius');
+$('mPoly').onclick = () => setMode('polygon');
+$('radius').oninput = draw;
+$('undo').onclick = () => { pts.pop(); draw(); };
+$('clear').onclick = () => { pts = []; draw(); };
+$('find').onclick = async () => {
+  const q = $('adr').value.trim(); if (!q) return;
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j.length) { setHint('notfound'); return; }
+    const ll = L.latLng(+j[0].lat, +j[0].lon);
+    map.setView(ll, 16);
+    if (mode === 'radius') { center = ll; draw(); }
+  } catch (e) { setHint('searchfail'); }
+};
+$('adr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('find').click(); } });
+
+function el(tag, text, cls) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; }
+function showResult(o, offline) {
+  last = [o, offline];
+  const b = $('resBody'); b.textContent = '';
+  if (offline) b.append(el('p', t('offline'), 'note'));
+  if (o.ok) b.append(el('div', t('cost')), el('div', nf(o.preis_von) + ' – ' + nf(o.preis_bis) + ' €', 'big'));
+  else b.append(el('p', t('manual'), 'note'));
+  const dl = el('dl', undefined, 'kv');
+  [[t('kNr'), o.projekt_nr], [t('kSvc'), t('svcShort')], [t('kArea'), o.flaeche_ha ? nf(o.flaeche_ha) + ' ha' : '–'],
+   [t('kTime'), o.bearbeitung_wochen ? t('weeks', o.bearbeitung_wochen) : t('byarr')]]
+    .forEach(([k, v]) => dl.append(el('dt', k), el('dd', v)));
+  b.append(dl, el('div', t('slots')));
+  const s = el('div', undefined, 'slots');
+  String(o.ruf_termine).split(' | ').forEach(x => s.append(el('span', slotText(x))));
+  b.append(s, el('p', t('disclaimer'), 'hint'));
+  $('form').style.display = 'none'; $('result').style.display = 'block';
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault(); $('err').textContent = '';
+  if (!areaHa()) { $('err').textContent = t('errLoc'); return; }
+  const f = new FormData(e.target), p = Object.fromEntries(f.entries());
+  p.sprache = lang; p.modus = mode; p.radius_m = Number($('radius').value);
+  p.polygon = pts.map(q => [q.lat, q.lng]);
+  const c = mode === 'radius' ? center : L.polygon(pts).getBounds().getCenter();
+  p.lat = c.lat; p.lon = c.lng;
+  if (!WEBHOOK_URL) { showResult(buildOffer(p, new Date()), true); window.scrollTo({top: 0, behavior: 'smooth'}); return; }
+  $('send').disabled = true; $('send').textContent = t('sending');
+  try {
+    const r = await fetch(WEBHOOK_URL, {method: 'POST', body: new URLSearchParams({payload: JSON.stringify(p)})});
+    if (!r.ok) throw new Error(r.status);
+    showResult(await r.json(), false); window.scrollTo({top: 0, behavior: 'smooth'});
+  } catch (x) {
+    $('err').textContent = t('errSend');
+    $('send').disabled = false; $('send').textContent = t('send');
+  }
+});
+setLang(lang); setMode('radius');
+</script>
+</body>
+</html>

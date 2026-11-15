@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anfragen-Dashboard (Prototyp)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--ink:#1d2a26;--mute:#5d6b66;--line:#d9ded8;--bg:#f4f2ec;--acc:#2f5d50;--warn:#9a5b13}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+main{max-width:1200px;margin:0 auto;padding:24px 16px 50px}
+header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+h1{font-size:24px;margin:0}
+#state{color:var(--mute);font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+@media(max-width:700px){.tiles{grid-template-columns:1fr 1fr}}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tile div{color:var(--mute);font-size:13px}.tile b{font-size:26px;font-variant-numeric:tabular-nums}
+#map{height:340px;border:1px solid var(--line);border-radius:10px}
+.wrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:10px;margin-top:14px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:13px;color:var(--mute);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.tag{border-radius:20px;padding:2px 10px;font-size:13px;background:#e8efe9;color:var(--acc)}
+.tag.w{background:#fbf3e4;color:var(--warn)}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Anfragen Luftbildauswertung</h1><span id="state">Lädt …</span></header>
+<div class="tiles">
+<div class="tile"><div>Anfragen gesamt</div><b id="k1">–</b></div>
+<div class="tile"><div>Angefragte Fläche</div><b id="k2">–</b></div>
+<div class="tile"><div>Angebotsvolumen (Mittelwert)</div><b id="k3">–</b></div>
+<div class="tile"><div>Manuell zu prüfen</div><b id="k4">–</b></div>
+</div>
+<div id="map"></div>
+<div class="wrap"><table><thead><tr>
+<th>Projekt-Nr.</th><th>Eingang</th><th>Status</th><th>Kunde</th><th>Firma</th><th>Ort</th><th>Vorhaben</th><th>Fläche ha</th><th>Preisspanne €</th><th>Dringlichkeit</th>
+</tr></thead><tbody id="rows"></tbody></table></div>
+</main>
+<script>
+// ▼▼▼ Production-URL des Dashboard-Webhooks und Schlüssel (wie im n8n-Code-Node) ▼▼▼
+const DASHBOARD_URL = "https://sumitpr.app.n8n.cloud/webhook/uxo-dashboard";
+const KEY = "demo123";
+
+const $ = id => document.getElementById(id);
+const num = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : 0; };
+const map = L.map('map').setView([51.2, 10.4], 6);
+// Kartenhintergrund: probiert mehrere freie Quellen nacheinander, falls eine nicht lädt
+function addBase(map) {
+  const src = [
+    ['https://sgx.geodatenzentrum.de/wmts_basemapde/tile/1.0.0/de_basemapde_web_raster_farbe/default/GLOBAL_WEBMERCATOR/{z}/{y}/{x}.png', '© basemap.de / BKG', 18],
+    ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', 'Tiles © Esri', 19],
+    ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap', 19]
+  ];
+  let i = 0, cur;
+  (function use() {
+    let ok = false, bad = 0;
+    cur = L.tileLayer(src[i][0], {attribution: src[i][1], maxNativeZoom: src[i][2], maxZoom: 19}).addTo(map);
+    cur.on('tileload', () => { ok = true; });
+    cur.on('tileerror', () => { if (!ok && ++bad >= 3 && i < src.length - 1) { map.removeLayer(cur); i++; use(); } });
+  })();
+}
+addBase(map);
+const layer = L.featureGroup().addTo(map);
+
+function render(rows) {
+  rows = rows.filter(r => r.projekt_nr).reverse();
+  $('k1').textContent = rows.length;
+  $('k2').textContent = rows.reduce((s, r) => s + num(r.flaeche_ha), 0).toLocaleString('de-DE', {maximumFractionDigits: 1}) + ' ha';
+  $('k3').textContent = Math.round(rows.reduce((s, r) => s + (num(r.preis_von) + num(r.preis_bis)) / 2, 0)).toLocaleString('de-DE') + ' €';
+  $('k4').textContent = rows.filter(r => r.status !== 'Neu').length;
+  const tb = $('rows'); tb.textContent = ''; layer.clearLayers();
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const cell = (t, c) => { const td = document.createElement('td'); td.textContent = t ?? ''; if (c) td.className = c; tr.append(td); return td; };
+    cell(r.projekt_nr); cell(r.eingang);
+    const st = cell(''); const tag = document.createElement('span'); tag.className = 'tag' + (r.status === 'Neu' ? '' : ' w'); tag.textContent = r.status; st.append(tag);
+    cell(r.name); cell(r.firma); cell(r.adresse); cell(r.vorhaben);
+    cell(num(r.flaeche_ha).toLocaleString('de-DE'), 'n');
+    cell(r.preis_von ? num(r.preis_von).toLocaleString('de-DE') + ' – ' + num(r.preis_bis).toLocaleString('de-DE') : '–', 'n');
+    cell(r.dringlichkeit);
+    tb.append(tr);
+    try {
+      const g = JSON.parse(r.geojson);
+      let shp;
+      if (g.type === 'Polygon') shp = L.polygon(g.coordinates[0].map(c => [c[1], c[0]]), {color: '#2f5d50'});
+      else shp = L.circle([g.coordinates[1], g.coordinates[0]], {radius: Math.max(g.radius_m || 50, 50), color: '#2f5d50'});
+      shp.bindTooltip(String(r.projekt_nr)).addTo(layer);
+    } catch (e) {}
+  });
+  if (layer.getLayers().length) map.fitBounds(layer.getBounds().pad(0.3), {maxZoom: 14});
+  $('state').textContent = 'Stand: ' + new Date().toLocaleTimeString('de-DE');
+}
+async function load() {
+  if (!DASHBOARD_URL) { $('state').textContent = 'Kein Webhook eingetragen (DASHBOARD_URL im Quelltext setzen)'; return; }
+  try {
+    const r = await fetch(DASHBOARD_URL + '?key=' + encodeURIComponent(KEY));
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    render(Array.isArray(j) ? j : [j]);
+  } catch (e) { $('state').textContent = 'Daten konnten nicht geladen werden'; }
+}
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>
